@@ -1,0 +1,1152 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #retryButton {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 34px;
+      padding: 40px 40px;
+      display: none;
+    }
+    #leftButton, #rightButton {
+      position: absolute;
+      bottom: 40px;
+      font-size: 24px;
+      padding: 10px 20px;
+      user-select: none;
+    }
+    #leftButton {
+      left: 20px;
+    }
+    #rightButton {
+      right: 20px;
+    }
+  </style>
+</head>
+<body>
+ <canvas id="gameCanvas" sandbox="allow-scripts"></canvas>
+ <button id="startButton" onclick="startGame()">Start Game</button>
+ <button id="retryButton" onclick="resetGame()">Retry</button>
+ <div id="leftButton">◀</div>
+ <div id="rightButton">▶</div>
+  <script>
+    var canvas = document.getElementById('gameCanvas');
+    var ctx = canvas.getContext('2d');
+    var retryButton = document.getElementById('retryButton');
+
+    // ここに追加
+    let scoreData = {};
+
+    var paddleWidth = 250;
+    var paddleHeight = 10;
+    var paddleX = (canvas.width - paddleWidth) / 2;
+    var paddleY = canvas.height - paddleHeight - 60;
+    var paddleSpeed = 7;
+
+    var ballRadius = 20;
+    var ballX = canvas.width / 2;
+    var ballY = paddleY - ballRadius;
+    var ballSpeedX = 20;
+    var ballSpeedY = -20;
+    var ballSpeedIncrease = 1.02;
+
+    var rightPressed = false;
+    var leftPressed = false;
+
+    var brickRowCount = 30;
+    var brickColumnCount = 20;
+    var brickWidth = 30;
+    var brickHeight = 25;
+    var brickPadding = 0;
+    var brickOffsetTop = 30;
+    var brickOffsetLeft = 0;
+    var bricks = [];
+    
+
+    var remainingBricks = 0;
+    var gameOver = false;
+
+    var score = 0;
+    var starScore = 0;
+    var startTime;
+    var endTime;
+
+    var imgData1, imgData2;
+
+    var ballColors = ['#0095DD', 'red', 'yellow'];
+    var ballColorIndex = 0;
+    var ballPower = 1;
+
+  var skull = {
+  x: 0,
+  y: 0,
+  speed: 4, // どくろマークの速度を2倍に
+  visible: false
+};
+
+var star = {
+  x: 0,
+  y: 0,
+  speed: 6, // 星マークの速度を2倍に
+  visible: false,
+  duration: 20, // 星マークの効果持続時間（秒）
+  timer: 0
+};
+
+
+var heart = {
+  x: 0,
+  y: 0,
+  speed: 6,
+  visible: false,
+  duration: 10,
+  timer: 0
+};
+
+var heartInterval = 18;
+var heartTimer = 0;
+var lives = 1;
+
+var skullInterval = 10; // どくろマークが落ちてくる間隔（秒）
+var starInterval = 20; // 星マークが落ちてくる間隔（秒）
+
+var skullWidth = 60; // どくろの幅
+var skullHeight = 60; // どくろの高さ
+
+var skullTimer = 0;
+var starTimer = 0;
+
+var surpriseBox = {
+  x: 0,
+  y: 0,
+  width: 50,
+  height: 50,
+  visible: false,
+  duration: 10,
+  timer: 0
+};
+
+var crossBox = {
+  x: 0,
+  y: 0,
+  width: 50,
+  height: 50,
+  visible: false,
+  duration: 10,
+  timer: 0
+};
+
+var boxInterval = 20; // ボックスが出現する間隔（秒）
+var surpriseBoxTimer = 0;
+var crossBoxTimer = 0;
+
+var squidBox = {
+  x: 0,
+  y: 0,
+  width: 50,
+  height: 50,
+  visible: false,
+  duration: 15,
+  timer: 0
+};
+
+var upBox = {
+  x: 0,
+  y: 0,
+  speed: 6,
+  visible: false,
+  duration: 10,
+  timer: 0
+};
+
+var squidBoxTimer = 0;
+var upBoxInterval = 25;
+var upBoxTimer = 0;
+
+var darkScreen = false;
+var darkScreenTimer = 0;
+var darkScreenRect = {
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0
+};
+
+    // 画像URLの配列を定義
+let imagePairs = [
+  {
+    img1Url: "your image url",
+    img2Url: "your image url"
+  },
+  {
+    img1Url: "your image url",
+    img2Url: "your image url"
+  },
+  {
+    img1Url: "your image url",
+    img2Url: "your image url"
+  },
+  {
+    img1Url: "your image url",
+    img2Url: "your image url"
+  },
+  {
+    img1Url: "your image url",
+    img2Url: "your image url"
+  }
+  // 必要な画像ペアを追加
+];
+    
+    let img1Url = imagePairs[0].img1Url;
+    let img2Url = imagePairs[0].img2Url;
+    let img1 = new Image(); // img1を定義
+    let img2 = new Image(); // img2を定義
+    
+    let imagesLoaded = 0; // グローバルスコープで一度だけ宣言する
+    
+    // 画像をBase64でエンコードして読み込み
+    google.script.run.withSuccessHandler(function(base64) {
+      img1.src = "data:image/jpeg;base64," + base64;
+      imagesLoaded++;
+      if (imagesLoaded == 2) {
+        startGame();
+      }
+    }).getImageBase64(img1Url);
+    
+    google.script.run.withSuccessHandler(function(base64) {
+      img2.src = "data:image/jpeg;base64," + base64;
+      imagesLoaded++;
+      if (imagesLoaded == 2) {
+        startGame();
+      }
+    }).getImageBase64(img2Url);
+
+
+
+function drawSkull() {
+  if (skull.visible) {
+    ctx.beginPath();
+    ctx.moveTo(skull.x + skullWidth / 2, skull.y);
+    ctx.lineTo(skull.x + skullWidth, skull.y + skullHeight);
+    ctx.lineTo(skull.x + skullWidth / 2, skull.y + skullHeight * 0.8);
+    ctx.lineTo(skull.x, skull.y + skullHeight);
+    ctx.closePath();
+    ctx.fillStyle = 'white';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(skull.x + skullWidth * 0.3, skull.y + skullHeight * 0.3, 6, 0, Math.PI * 2);
+    ctx.arc(skull.x + skullWidth * 0.7, skull.y + skullHeight * 0.3, 6, 0, Math.PI * 2);
+    ctx.fillStyle = 'black';
+    ctx.fill();
+  }
+}
+
+function drawStar() {
+  if (star.visible) {
+    ctx.beginPath();
+    ctx.moveTo(star.x + 15, star.y);
+    ctx.lineTo(star.x + 18, star.y + 10);
+    ctx.lineTo(star.x + 30, star.y + 12);
+    ctx.lineTo(star.x + 20, star.y + 20);
+    ctx.lineTo(star.x + 23, star.y + 30);
+    ctx.lineTo(star.x + 15, star.y + 25);
+    ctx.lineTo(star.x + 7, star.y + 30);
+    ctx.lineTo(star.x + 10, star.y + 20);
+    ctx.lineTo(star.x, star.y + 12);
+    ctx.lineTo(star.x + 12, star.y + 10);
+    ctx.closePath();
+    ctx.fillStyle = 'yellow';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+  }
+}
+
+function drawHeart() {
+  if (heart.visible) {
+    ctx.beginPath();
+    ctx.moveTo(heart.x + 10, heart.y + 10);
+    ctx.arc(heart.x + 10, heart.y + 10, 10, 0, Math.PI * 2);
+    ctx.moveTo(heart.x + 30, heart.y + 10);
+    ctx.arc(heart.x + 30, heart.y + 10, 10, 0, Math.PI * 2);
+    ctx.moveTo(heart.x + 20, heart.y + 20);
+    ctx.lineTo(heart.x + 5, heart.y + 35);
+    ctx.lineTo(heart.x + 35, heart.y + 35);
+    ctx.closePath();
+    ctx.fillStyle = 'red';
+    ctx.fill();
+  }
+}
+
+function updateHeart() {
+  heartTimer++;
+
+  if (!heart.visible && heartTimer >= heartInterval * 60) {
+    heart.visible = true;
+    heart.x = Math.random() * (canvas.width - 40);
+    heart.y = 0;
+    heart.timer = 0;
+    heartTimer = 0;
+  }
+
+  if (heart.visible) {
+    heart.y += heart.speed;
+
+    if (heart.y > canvas.height) {
+      heart.visible = false;
+    }
+
+    if (heart.y + 40 > paddleY && heart.x > paddleX && heart.x < paddleX + paddleWidth) {
+      heart.visible = false;
+      heart.timer = heart.duration * 60;
+
+      // Modification 1: Add 1000 points to the score
+      score += 1000; 
+
+      lives++; // Add one life
+      ballSpeedX = 20; // Reset ball speed
+      ballSpeedY = -20;
+    }
+  }
+
+  if (heart.timer > 0) {
+    heart.timer--;
+  }
+}
+
+function updateSkull() {
+  skullTimer++;
+
+  if (!skull.visible && skullTimer >= skullInterval * 60) {
+    skull.visible = true;
+    skull.x = Math.random() * (canvas.width - skullWidth);
+    skull.y = 0;
+    skullTimer = 0;
+  }
+
+  if (skull.visible) {
+    skull.y += skull.speed;
+
+    if (skull.y > canvas.height) {
+      skull.visible = false;
+    }
+
+    if (
+  skull.y + skullHeight > paddleY &&
+  skull.x + skullWidth > paddleX &&
+  skull.x < paddleX + paddleWidth
+) {
+  skull.visible = false;
+  if (paddleSpeed > 5) {
+    paddleSpeed *= 0.8;
+  }
+  addRandomBricks(25);
+
+  // Modification 2: Subtract 2/3 of the current score
+  score = Math.floor(score * (2/3));
+    }
+  }
+}
+
+function updateStar() {
+  if (!star.visible && starTimer >= starInterval * 60) {
+    star.visible = true;
+    star.x = Math.random() * (canvas.width - 30);
+    star.y = 0;
+    starTimer = 0;
+  }
+
+  if (star.visible) {
+    star.y += star.speed;
+
+    if (star.y > canvas.height) {
+      star.visible = false;
+      starTimer = 0;
+    }
+
+    if (star.y + 30 > paddleY && star.x > paddleX && star.x < paddleX + paddleWidth) {
+      star.visible = false;
+      star.timer = star.duration * 60;
+
+      // Calculate and add star bonus to the main score
+      let starBonus = Math.floor(score * 1.5);
+      score += starBonus; 
+
+      starTimer = 0;
+      
+      // ボールの色をランダムに変更する
+      if (Math.random() < 0.5) {
+        ballColorIndex = 1; // 赤色
+      } else {
+        ballColorIndex = 2; // 黄色
+      }
+    }
+  }
+
+  if (star.timer > 0) {
+    star.timer--;
+    if (star.timer === 0) {
+      ballColorIndex = 0; // スターの効果が切れたら、ボールの色を元に戻す
+    }
+  }
+
+  starTimer++;
+}
+
+function drawSurpriseBox() {
+  if (surpriseBox.visible) {
+    ctx.beginPath();
+    ctx.rect(surpriseBox.x, surpriseBox.y, surpriseBox.width, surpriseBox.height);
+    ctx.fillStyle = 'yellow';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+    ctx.font = '54px Arial';
+    ctx.fillStyle = 'black';
+    ctx.fillText('!', surpriseBox.x + 15, surpriseBox.y + 28);
+  }
+}
+
+function drawCrossBox() {
+  if (crossBox.visible) {
+    ctx.beginPath();
+    ctx.rect(crossBox.x, crossBox.y, crossBox.width, crossBox.height);
+    ctx.fillStyle = 'red';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+    ctx.font = '54px Arial';
+    ctx.fillStyle = 'black';
+    ctx.fillText('×', crossBox.x + 12, crossBox.y + 28);
+  }
+}
+
+function updateSurpriseBox() {
+  if (!surpriseBox.visible && surpriseBoxTimer >= boxInterval * 60) {
+    surpriseBox.visible = true;
+    surpriseBox.x = Math.random() * (canvas.width - surpriseBox.width);
+    surpriseBox.y = Math.random() * (canvas.height - surpriseBox.height);
+    surpriseBox.timer = surpriseBox.duration * 60;
+    surpriseBoxTimer = 0;
+  }
+
+  if (surpriseBox.visible) {
+    if (surpriseBox.timer > 0) {
+      surpriseBox.timer--;
+    } else {
+      surpriseBox.visible = false;
+    }
+  }
+
+  surpriseBoxTimer++;
+}
+
+function updateCrossBox() {
+  if (!crossBox.visible && crossBoxTimer >= boxInterval * 60) {
+    crossBox.visible = true;
+    crossBox.x = Math.random() * (canvas.width - crossBox.width);
+    crossBox.y = Math.random() * (canvas.height - crossBox.height);
+    crossBox.timer = crossBox.duration * 60;
+    crossBoxTimer = 0;
+  }
+
+  if (crossBox.visible) {
+    if (crossBox.timer > 0) {
+      crossBox.timer--;
+    } else {
+      crossBox.visible = false;
+    }
+  }
+
+  crossBoxTimer++;
+}
+
+function drawSquidBox() {
+  if (squidBox.visible) {
+    ctx.beginPath();
+    ctx.rect(squidBox.x, squidBox.y, squidBox.width, squidBox.height);
+    ctx.fillStyle = 'purple';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+    ctx.font = '24px Arial';
+    ctx.fillStyle = 'white';
+    ctx.fillText('イカ', squidBox.x + 5, squidBox.y + 28);
+  }
+}
+
+function drawUpBox() {
+  if (upBox.visible) {
+    ctx.beginPath();
+    ctx.rect(upBox.x, upBox.y, 40, 40);
+    ctx.fillStyle = 'green';
+    ctx.fill();
+    ctx.strokeStyle = 'black';
+    ctx.stroke();
+    ctx.font = '24px Arial';
+    ctx.fillStyle = 'white';
+    ctx.fillText('UP', upBox.x + 5, upBox.y + 28);
+  }
+}
+
+function updateSquidBox() {
+  if (!squidBox.visible && squidBoxTimer >= boxInterval * 60) {
+    squidBox.visible = true;
+    squidBox.x = Math.random() * (canvas.width - squidBox.width);
+    squidBox.y = Math.random() * (canvas.height - squidBox.height);
+    squidBox.timer = squidBox.duration * 60;
+    squidBoxTimer = 0;
+  }
+
+  if (squidBox.visible) {
+    if (squidBox.timer > 0) {
+      squidBox.timer--;
+    } else {
+      squidBox.visible = false;
+    }
+  }
+
+  squidBoxTimer++;
+}
+
+function updateUpBox() {
+  if (!upBox.visible && upBoxTimer >= upBoxInterval * 60) {
+    upBox.visible = true;
+    upBox.x = Math.random() * (canvas.width - 40);
+    upBox.y = 0;
+    upBoxTimer = 0;
+  }
+
+  if (upBox.visible) {
+    upBox.y += upBox.speed;
+
+    if (upBox.y > canvas.height) {
+      upBox.visible = false;
+    }
+
+    if (upBox.y + 40 > paddleY && upBox.x > paddleX && upBox.x < paddleX + paddleWidth) {
+      upBox.visible = false;
+      upBox.timer = upBox.duration * 60;
+      ballRadius = 30; // ボールを大きくする
+
+      // 2か所のブロックをランダムに破壊
+  for (let i = 0; i < 2; i++) {
+    destroyRandomBrick();
+    }
+  }
+  }
+
+
+  if (upBox.timer > 0) {
+    upBox.timer--;
+    if (upBox.timer === 0) {
+      ballRadius = 20; // UPボックスの効果が切れたら、ボールを元のサイズに戻す
+    }
+  }
+
+  upBoxTimer++;
+}
+
+function updateDarkScreen() {
+  if (darkScreen) {
+    if (darkScreenTimer > 0) {
+      darkScreenTimer--;
+    } else {
+      darkScreen = false;
+    }
+  }
+}
+
+
+function destroyRandomBricks(count) {
+  for (let i = 0; i < count; i++) {
+    let randomCol = Math.floor(Math.random() * brickColumnCount);
+    let randomRow = Math.floor(Math.random() * brickRowCount);
+
+    if (bricks[randomCol][randomRow].status > 0) {
+      bricks[randomCol][randomRow].status--;
+      if (bricks[randomCol][randomRow].status === 0) {
+        remainingBricks--;
+      }
+    }
+  }
+}
+
+function addRandomBricks(count) {
+  for (let i = 0; i < count; i++) {
+    let randomCol = Math.floor(Math.random() * brickColumnCount);
+    let randomRow = Math.floor(Math.random() * brickRowCount);
+
+    if (bricks[randomCol][randomRow].status === 0) {
+      bricks[randomCol][randomRow].status = 3;
+      remainingBricks++;
+    }
+  }
+}
+
+
+    function drawBall() {
+     ctx.beginPath();
+     ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+     ctx.fillStyle = ballColors[ballColorIndex];
+     ctx.fill();
+     ctx.closePath();
+   }
+
+    function drawPaddle() {
+      ctx.beginPath();
+      ctx.rect(paddleX, paddleY, paddleWidth, paddleHeight);
+      ctx.fillStyle = 'black';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function drawBricks() {
+      for (let c = 0; c < brickColumnCount; c++) {
+        for (let r = 0; r < brickRowCount; r++) {
+          if (bricks[c][r].status == 1) {
+            let brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+            let brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+            bricks[c][r].x = brickX;
+            bricks[c][r].y = brickY;
+
+            // Draw the brick texture from img2
+            let imgX = Math.floor(brickX * img2.width / canvas.width);
+            let imgY = Math.floor(brickY * img2.height / (canvas.height - 80));
+            ctx.drawImage(img2, imgX, imgY, brickWidth * img2.width / canvas.width, brickHeight * img2.height / (canvas.height - 200), brickX, brickY, brickWidth, brickHeight);
+
+            // Draw brick border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.strokeRect(brickX, brickY, brickWidth, brickHeight);
+          }
+        }
+      }
+    }
+
+async function recordScore() {
+  return new Promise((resolve) => {
+    google.script.run.withSuccessHandler((spreadsheetId) => {
+      const scoreData = {
+        score: score
+      };
+
+      google.script.run.withSuccessHandler((rankData) => {
+        scoreData.score = rankData.score;
+        scoreData.rank = rankData.rank;
+        scoreData.rankDescription = rankData.description;
+        resolve(scoreData);
+      }).recordScoreToSpreadsheet(spreadsheetId, scoreData);
+    }).getSpreadsheetId();
+  });
+}
+
+function drawRemainingBricks() {
+      ctx.font = '30px Arial';
+      ctx.fillStyle = '#0095DD';
+      ctx.fillText(`Remaining Bricks: ${remainingBricks}`, 8, 20);
+    }
+
+function drawScore() {
+  ctx.font = '26px Arial';
+  let totalScore = score + starScore;
+  ctx.fillStyle = '#0095DD';
+  ctx.fillText('Score: ' + score, 8, 40);
+  ctx.fillText('Star Score: ' + starScore, 8, 60);
+
+  // Display rank if available
+  if (scoreData.rankDescription) {
+    ctx.fillText('Your Rank: ' + scoreData.rankDescription, 8, 80);
+  }
+}
+
+function drawLives() {
+  // ライブスの背景を描画
+  ctx.fillStyle = 'rgba(200, 200, 200, 0.5)'; // 薄グレーの背景
+  ctx.fillRect(0, 80, 300, 60); // テキストが描画される領域に合わせてサイズを調整
+  
+  // ライブスのテキストを描画
+  ctx.font = '36px Arial';
+  ctx.fillStyle = '#FFFFFF'; // テキストを白色に
+  var heartImage = '❤️';
+  var livesText = '';
+  for (var i = 0; i < lives; i++) {
+    livesText += heartImage;
+  }
+  ctx.fillText(livesText + ' ' + lives, 8, 120);
+}
+
+
+async function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img1, 0, 0, canvas.width, canvas.height - 200);
+
+  if (darkScreen) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  drawBricks();
+  drawBall();
+  drawPaddle();
+  drawRemainingBricks();
+  drawSkull();
+  drawStar();
+  drawScore();
+  drawHeart();
+  drawLives();
+  drawSurpriseBox();
+  drawCrossBox();
+  drawSquidBox();
+  drawUpBox();
+
+  collisionDetection();
+
+  updateSkull();
+  updateStar();
+  updateHeart();
+  updateSurpriseBox();
+  updateCrossBox();
+  updateSquidBox();
+  updateUpBox();
+  updateDarkScreen();
+
+  if (squidBox.visible && ballX > squidBox.x && ballX < squidBox.x + squidBox.width && ballY > squidBox.y && ballY < squidBox.y + squidBox.height) {
+    squidBox.visible = false;
+    darkScreen = true;
+    darkScreenTimer = 10 * 60;
+    score -= 500;
+
+    // 画面の一部分をランダムに選択
+    darkScreenRect.width = Math.random() * (canvas.width * 0.8) + (canvas.width * 0.2);
+    darkScreenRect.height = Math.random() * (canvas.height * 0.8) + (canvas.height * 0.2);
+    darkScreenRect.x = Math.random() * (canvas.width - darkScreenRect.width);
+    darkScreenRect.y = Math.random() * (canvas.height - darkScreenRect.height);
+  }
+  
+
+  if (surpriseBox.visible && ballX > surpriseBox.x && ballX < surpriseBox.x + surpriseBox.width && ballY > surpriseBox.y && ballY < surpriseBox.y + surpriseBox.height) {
+    surpriseBox.visible = false;
+    destroyRandomBricks(20);
+  }
+
+  if (crossBox.visible && ballX > crossBox.x && ballX < crossBox.x + crossBox.width && ballY > crossBox.y && ballY < crossBox.y + crossBox.height) {
+    crossBox.visible = false;
+    addRandomBricks(50);
+  }
+
+  if (ballX + ballSpeedX > canvas.width - ballRadius || ballX + ballSpeedX < ballRadius) {
+    ballSpeedX = -ballSpeedX;
+  }
+  if (ballY + ballSpeedY < ballRadius) {
+    let angle = Math.atan2(-ballSpeedY, ballSpeedX);
+    angle += (Math.random() - 0.5) * (Math.PI / 6);
+    let currentSpeed = Math.sqrt(ballSpeedX * ballSpeedX + ballSpeedY * ballSpeedY);
+    ballSpeedX = currentSpeed * Math.cos(angle);
+    ballSpeedY = Math.abs(currentSpeed * Math.sin(angle));
+  } else if (ballY + ballSpeedY > paddleY - ballRadius) { // 条件を変更
+  if (ballX > paddleX && ballX < paddleX + paddleWidth) {
+    let collidePoint = (ballX - (paddleX + paddleWidth / 2)) / (paddleWidth / 2);
+    let angle = collidePoint * (Math.PI / 3);
+    angle += (Math.random() - 0.5) * (Math.PI / 6);
+
+    // ボールの現在のスピードを保持し、一定の倍率で増加させる
+    let currentSpeed = Math.sqrt(ballSpeedX * ballSpeedX + ballSpeedY * ballSpeedY);
+    currentSpeed *= ballSpeedIncrease; // ボールのスピードを増加させる倍率
+
+    // 角度に関わらず、常にボールのスピードを増加させる
+    ballSpeedX = currentSpeed * Math.sin(angle);
+    ballSpeedY = -currentSpeed * Math.cos(angle);
+    if (star.timer > 0) {
+      if (Math.random() < 0.5) {
+        ballColorIndex = 1; // 赤色
+      } else {
+        ballColorIndex = 2; // 黄色
+      }
+    } else {
+      if (Math.random() < 0.1) {
+        ballColorIndex = 1;
+        ballPower = 3;
+      } else if (Math.random() < 0.1) {
+        ballColorIndex = 2;
+        ballPower = 2;
+      } else {
+        ballColorIndex = 0;
+        ballPower = 1;
+      }
+    }
+  } else {
+    lives--; // ライフを1つ減らす
+    if (lives === 0) {
+      gameOverHandler(); // awaitを使用しない
+    } else {
+      // ボールの位置を初期値に戻す
+      ballX = canvas.width / 2;
+      ballY = paddleY - ballRadius;
+      ballSpeedX = 20;
+      ballSpeedY = -20;
+    }
+  }
+}
+
+if (rightPressed && paddleX < canvas.width - paddleWidth) {
+  paddleX += paddleSpeed;
+} else if (leftPressed && paddleX > 0) {
+  paddleX -= paddleSpeed;
+}
+
+ballX += ballSpeedX;
+ballY += ballSpeedY;
+
+if (star.timer > 0 && ballColorIndex === 0) {
+  ballColorIndex = 1;
+} else if (star.timer > 0 && ballColorIndex === 1) {
+  ballColorIndex = 2;
+} else if (star.timer === 0) {
+  ballColorIndex = 0;
+}
+
+ if (!gameOver) {
+  requestAnimationFrame(draw);
+} else {
+  await gameOverHandler('GAME OVER');
+}
+}
+
+    function keyDownHandler(e) {
+      if (e.key == 'Right' || e.key == 'ArrowRight') {
+        rightPressed = true;
+      } else if (e.key == 'Left' || e.key == 'ArrowLeft') {
+        leftPressed = true;
+      }
+    }
+
+    function keyUpHandler(e) {
+      if (e.key == 'Right' || e.key == 'ArrowRight') {
+        rightPressed = false;
+      } else if (e.key == 'Left' || e.key == 'ArrowLeft') {
+        leftPressed = false;
+      }
+    }
+
+    let touchX = null;
+
+    function touchStartHandler(e) {
+      if (e.touches.length === 1) {
+        touchX = e.touches[0].clientX - canvas.offsetLeft;
+        paddleX = touchX - paddleWidth / 2;
+      }
+    }
+
+    function touchMoveHandler(e) {
+      if (touchX !== null && e.touches.length === 1) {
+        let newTouchX = e.touches[0].clientX - canvas.offsetLeft;
+        let deltaTouchX = newTouchX - touchX;
+        touchX = newTouchX;
+        paddleX += deltaTouchX;
+        
+        // パドルがキャンバスの範囲内に収まるように制限
+        if (paddleX < 0) {
+          paddleX = 0;
+        } else if (paddleX + paddleWidth > canvas.width) {
+          paddleX = canvas.width - paddleWidth;
+        }
+      }
+    }
+
+    function touchEndHandler() {
+      touchX = null;
+    }
+
+  function collisionDetection() {
+  for (let c = 0; c < brickColumnCount; c++) {
+    for (let r = 0; r < brickRowCount; r++) {
+      let b = bricks[c][r];
+      if (b.status >= 1) {
+        if (ballX > b.x && ballX < b.x + brickWidth && ballY > b.y && ballY < b.y + brickHeight) {
+          if (ballSpeedY < 0) {
+            b.status -= ballPower;
+            if (b.status <= 0) {
+              remainingBricks--;
+              score += 10;
+              bricks[c][r].status = 0; // ブロックの描画ステータスを0に設定
+            }
+
+            if (ballColorIndex === 1) {
+              for (let i = 0; i < 2; i++) {
+                destroyRandomBrick();
+              }
+            } else if (ballColorIndex === 2) {
+              destroyRandomBrick();
+            }
+
+            if (remainingBricks == 0) {
+            endTime = new Date();
+            var elapsedTime = (endTime - startTime) / 1000;
+            var timeBonus = Math.max(0, 100 - elapsedTime) * 10;
+             score += timeBonus;
+             gameOver = true;
+             gameOverHandler(true); // ゲームクリアのフラグを渡す
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+    document.addEventListener('keydown', keyDownHandler, false);
+    document.addEventListener('keyup', keyUpHandler, false);
+    canvas.addEventListener('touchstart', touchStartHandler, false);
+    canvas.addEventListener('touchmove', touchMoveHandler, false);
+    canvas.addEventListener('touchend', touchEndHandler, false);
+
+    function destroyRandomBrick() {
+  let randomCol = Math.floor(Math.random() * brickColumnCount);
+  let randomRow = Math.floor(Math.random() * brickRowCount);
+
+  while (bricks[randomCol][randomRow].status <= 0) {
+    randomCol = Math.floor(Math.random() * brickColumnCount);
+    randomRow = Math.floor(Math.random() * brickRowCount);
+  }
+
+  bricks[randomCol][randomRow].status -= ballPower;
+  if (bricks[randomCol][randomRow].status <= 0) {
+    remainingBricks--;
+  }
+}
+
+ function resetGame() {
+  gameOver = false;
+  remainingBricks = 0;
+  score = 0;
+  lives = 1;
+  ballX = canvas.width / 2;
+  ballY = paddleY - ballRadius;
+  ballSpeedX = 20;
+  ballSpeedY = -20;
+  ballSpeedIncrease = 1.02;
+  paddleX = (canvas.width - paddleWidth) / 2;
+  retryButton.style.display = 'none';
+  
+  // パドルの速度を初期値に戻す
+  paddleSpeed = 7;
+  
+  // ブロックの状態を初期化する
+  for (let c = 0; c < brickColumnCount; c++) {
+    for (let r = 0; r < brickRowCount; r++) {
+      bricks[c][r].status = 0;
+    }
+  }
+  
+  // アイテムの状態を初期化する
+  skull.visible = false;
+  star.visible = false;
+  heart.visible = false;
+  surpriseBox.visible = false;
+  crossBox.visible = false;
+  squidBox.visible = false;
+  upBox.visible = false;
+  
+  // タイマーをリセットする
+  skullTimer = 0;
+  starTimer = 0;
+  heartTimer = 0;
+  surpriseBoxTimer = 0;
+  crossBoxTimer = 0;
+  squidBoxTimer = 0;
+  upBoxTimer = 0;
+
+   // ダークスクリーンをリセットする
+  darkScreen = false;
+  darkScreenTimer = 0;
+  darkScreenRect = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0
+  };
+
+  // ボールのサイズを初期値に戻す
+  ballRadius = 20;
+  
+  // ボールの色と威力を初期値に戻す
+  ballColorIndex = 0;
+  ballPower = 1;
+  
+  startGame();
+}
+
+    // キャンバスサイズをウィンドウサイズに合わせて調整
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      // ブロックのサイズと位置を調整
+      brickWidth = canvas.width / brickColumnCount;
+      brickHeight = (canvas.height - 200) / brickRowCount;
+      brickOffsetLeft = 0;
+      brickOffsetTop = 30;
+
+      // パドルの位置を調整
+      paddleX = (canvas.width - paddleWidth) / 2;
+      paddleY = canvas.height - paddleHeight - 60;
+    }
+
+    window.addEventListener('resize', resizeCanvas, false);
+    resizeCanvas();
+
+async function gameOverHandler(isGameClear = false) {
+  if (!gameOver) {
+    gameOver = true;
+    scoreData = await recordScore();
+    let message = isGameClear ? 'GAME CLEAR' : 'GAME OVER';
+    showGameOverlay(message, `Score: ${scoreData.score}<br>Rank: ${scoreData.rankDescription}`);
+  }
+}
+
+function showGameOverlay(title, message) {
+  // オーバーレイ用の要素を作成
+  var overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.background = 'rgba(0, 0, 0, 0.8)';
+  overlay.style.color = 'white';
+  overlay.style.display = 'flex';
+  overlay.style.flexDirection = 'column';
+  overlay.style.justifyContent = 'center';
+  overlay.style.alignItems = 'center';
+  overlay.style.zIndex = '1000';
+  
+  // タイトルを設定
+  var titleElement = document.createElement('h1');
+  titleElement.innerHTML = title;
+  titleElement.style.fontSize = '80px';
+  titleElement.style.marginBottom = '60px';
+  overlay.appendChild(titleElement);
+  
+  // メッセージを設定
+  var messageElement = document.createElement('p');
+  messageElement.innerHTML = message;
+  messageElement.style.fontSize = '74px';
+  messageElement.style.marginBottom = '60px';
+  overlay.appendChild(messageElement);
+  
+  // リトライボタンを設定
+  var retryButton = document.createElement('button');
+  retryButton.innerHTML = 'Retry';
+  retryButton.style.fontSize = '64px';
+  retryButton.style.padding = '35px 35px';
+  retryButton.onclick = function() {
+    overlay.remove();
+    resetGame();
+  };
+  overlay.appendChild(retryButton);
+  
+  // オーバーレイをドキュメントに追加
+  document.body.appendChild(overlay);
+}
+
+  function startGame() {
+  startTime = new Date(); // 開始時間を記録
+  starScore = 0;
+
+  // ランダムに画像ペアを選択
+  let randomIndex = Math.floor(Math.random() * imagePairs.length);
+  let selectedPair = imagePairs[randomIndex];
+
+  // 選択された画像ペアのURLを変数に代入
+  let img1Url = selectedPair.img1Url;
+  let img2Url = selectedPair.img2Url;
+
+  // 選択された画像ペアを読み込む
+  imagesLoaded = 0;
+  google.script.run.withSuccessHandler(function(base64) {
+    img1.src = "data:image/jpeg;base64," + base64;
+    imagesLoaded++;
+    if (imagesLoaded == 2) {
+      initializeGame();
+    }
+  }).getImageBase64(img1Url);
+
+  google.script.run.withSuccessHandler(function(base64) {
+    img2.src = "data:image/jpeg;base64," + base64;
+    imagesLoaded++;
+    if (imagesLoaded == 2) {
+      initializeGame();
+    }
+  }).getImageBase64(img2Url);
+}
+
+function initializeGame() {
+  // Draw the initial image (001.jpg)
+  ctx.drawImage(img1, 0, 0, canvas.width, canvas.height - 0);
+
+  // Get image data for both images
+  imgData1 = ctx.getImageData(0, 0, canvas.width, canvas.height - 0);
+  ctx.drawImage(img2, 0, 0, canvas.width, canvas.height - 0);
+  imgData2 = ctx.getImageData(0, 0, canvas.width, canvas.height - 0);
+
+  // Initialize bricks based on image differences
+  for (let c = 0; c < brickColumnCount; c++) {
+    bricks[c] = [];
+    for (let r = 0; r < brickRowCount; r++) {
+      bricks[c][r] = { x: 0, y: 0, status: 0 };
+
+      // Check if the brick area is different between the two images
+      let brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+      let brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+
+      // Iterate over the pixels within the brick area
+      for (let i = 0; i < brickWidth; i++) {
+        for (let j = 0; j < brickHeight; j++) {
+          let imgX = Math.floor((brickX + i) * img2.width / canvas.width);
+          let imgY = Math.floor((brickY + j) * img2.height / (canvas.height - 0));
+          let index = (imgY * img2.width + imgX) * 4;
+
+          // Compare the pixel values of the two images
+          if (imgData1.data[index] !== imgData2.data[index] ||
+              imgData1.data[index + 1] !== imgData2.data[index + 1] ||
+              imgData1.data[index + 2] !== imgData2.data[index + 2]) {
+            bricks[c][r].status = 1;
+            remainingBricks++;
+            break;
+          }
+        }
+        if (bricks[c][r].status === 1) {
+          break;
+        }
+      }
+    }
+  }
+
+  // Start the game loop
+  draw();
+}
+  </script>
+</body>
+</html>      
